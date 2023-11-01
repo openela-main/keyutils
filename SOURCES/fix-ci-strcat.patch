@@ -1,0 +1,58 @@
+commit d8106bbb5348591968722e14fe4ee4b81e7902aa
+Author: David Howells <dhowells@redhat.com>
+Date:   Wed Jun 16 15:06:36 2021 +0100
+
+    Fix issue found by Coverity
+    
+    This isn't something that can actually be triggered.  The port parameter is
+    always NULL, so just drop the parameter and the call to strcat().
+    
+    Error: STRING_OVERFLOW (CWE-120):
+    keyutils-1.5.10/key.dns_resolver.c:388: fixed_size_dest: You might overrun the 55-character fixed-size string "buf" by copying "port" without checking the length.
+    keyutils-1.5.10/key.dns_resolver.c:388: parameter_as_source: Note: This defect has an elevated risk because the source argument is a parameter of the current function.
+    
+Signed-off-by: David Howells <dhowells@redhat.com>
+---
+ key.dns_resolver.c |    8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/key.dns_resolver.c b/key.dns_resolver.c
+index f3052e6..2743119 100644
+--- a/key.dns_resolver.c
++++ b/key.dns_resolver.c
+@@ -332,7 +332,7 @@ static void dump_payload(void)
+  * string to the list of payload segments.
+  */
+ static int
+-dns_resolver(const char *server_name, const char *port)
++dns_resolver(const char *server_name)
+ {
+ 	struct addrinfo hints, *addr, *ai;
+ 	char buf[INET6_ADDRSTRLEN + 8 + 1];
+@@ -384,8 +384,6 @@ dns_resolver(const char *server_name, const char *port)
+ 		if (!inet_ntop(ai->ai_family, sa, buf, len))
+ 			error("%s: inet_ntop: %m", __func__);
+ 
+-		if (port)
+-			strcat(buf, port);
+ 		append_address_to_payload(buf);
+ 		if (mask & ONE_ADDR_ONLY)
+ 			break;
+@@ -449,7 +447,7 @@ static void afsdb_hosts_to_addrs(ns_msg handle,
+ 					goto next_one;
+ 
+ 			/* Turn the hostname into IP addresses */
+-			ret = dns_resolver(vllist[vlsnum], NULL);
++			ret = dns_resolver(vllist[vlsnum]);
+ 			if (ret) {
+ 				debug("AFSDB RR can't resolve."
+ 				      "subtype:%d, server name:%s, netmask:%u",
+@@ -604,7 +602,7 @@ int dns_query_a_or_aaaa(const char *hostname, char *options)
+ 	}
+ 
+ 	/* Turn the hostname into IP addresses */
+-	ret = dns_resolver(hostname, NULL);
++	ret = dns_resolver(hostname);
+ 	if (ret)
+ 		nsError(NO_DATA, hostname);
+ 

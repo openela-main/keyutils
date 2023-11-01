@@ -1,0 +1,27 @@
+commit 0b1654506039e614954e141aad3ceddb7018a2cb
+Author: David Howells <dhowells@redhat.com>
+Date:   Wed Apr 17 15:42:30 2019 +0100
+
+    TEST: Apply test exclusions for RHEL-8
+    
+    RHEL-8 doesn't enable the DH/KDF code, so disable the tests on all RHEL
+    distributions for now.
+    
+    Signed-off-by: David Howells <dhowells@redhat.com>
+
+diff --git a/tests/prepare.inc.sh b/tests/prepare.inc.sh
+index ab9ae4d..9c4adda 100644
+--- a/tests/prepare.inc.sh
++++ b/tests/prepare.inc.sh
+@@ -96,7 +96,10 @@ fi
+ # Work out whether Diffie-Hellman is supported by the kernel
+ #
+ have_dh_compute=0
+-if keyutils_at_or_later_than 1.5.10 && kernel_at_or_later_than 4.7-rc1
++if [ $OSDIST = RHEL ]
++then
++    :
++elif keyutils_at_or_later_than 1.5.10 && kernel_at_or_later_than 4.7-rc1
+ then
+     have_dh_compute=1
+ fi

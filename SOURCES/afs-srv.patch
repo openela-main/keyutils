@@ -1,0 +1,150 @@
+commit 0d71523ab58493e1b40e1c80d569ff8ebc5ea27d
+Author: David Howells <dhowells@redhat.com>
+Date: Wed, 9 May 2018 10:37:03 +0100
+
+    DNS: Support AFS SRV records and cell db config files
+
+    [dhowells: Cut down to only include generic changes as a prereq for the
+    next patch]
+
+Signed-off-by: David Howells <dhowells@redhat.com>
+---
+ key.dns_resolver.c |   47 +++++++++++++++++++++++++++++++----------------
+ 1 file changed, 31 insertions(+), 16 deletions(-)
+
+
+diff --git a/key.dns_resolver.c b/key.dns_resolver.c
+index 9c9d458..849c8fe 100644
+--- a/key.dns_resolver.c
++++ b/key.dns_resolver.c
+@@ -74,6 +74,7 @@ static int debug_mode;
+ #define	INET_IP6_ONLY		0x2
+ #define	INET_ALL		0xFF
+ #define ONE_ADDR_ONLY		0x100
++unsigned mask = INET_ALL;
+ 
+ /*
+  * segmental payload
+@@ -164,14 +165,10 @@ static const int ns_errno_map[] = {
+ 	[NO_DATA]		= ENODATA,
+ };
+ 
+-static __attribute__((noreturn))
+-void nsError(int err, const char *domain)
++void _nsError(int err, const char *domain)
+ {
+-	unsigned timeout = 1 * 60;
+-	int ret;
+-
+ 	if (isatty(2))
+-		fprintf(stderr, "%s: %s.\n", domain, hstrerror(err));
++		fprintf(stderr, "NS:%s: %s.\n", domain, hstrerror(err));
+ 	else
+ 		syslog(LOG_INFO, "%s: %s", domain, hstrerror(err));
+ 
+@@ -181,11 +178,28 @@ void nsError(int err, const char *domain)
+ 		err = ns_errno_map[err];
+ 
+ 	info("Reject the key with error %d", err);
++}
++
++static __attribute__((noreturn))
++void nsError(int err, const char *domain)
++{
++	unsigned timeout;
++	int ret;
++
++	_nsError(err, domain);
+ 
+-	if (err == EAGAIN)
++	switch (err) {
++	case TRY_AGAIN:
+ 		timeout = 1;
+-	else if (err == ECONNREFUSED)
++		break;
++	case 0:
++	case NO_RECOVERY:
+ 		timeout = 10;
++		break;
++	default:
++		timeout = 1 * 60;
++		break;
++	}
+ 
+ 	if (!debug_mode) {
+ 		ret = keyctl_reject(key, timeout, err, KEY_REQKEY_DEFL_DEFAULT);
+@@ -296,10 +310,10 @@ static void dump_payload(void)
+  * string to the list of payload segments.
+  */
+ static int
+-dns_resolver(const char *server_name, unsigned mask)
++dns_resolver(const char *server_name, const char *port)
+ {
+ 	struct addrinfo hints, *addr, *ai;
+-	char buf[INET6_ADDRSTRLEN + 1];
++	char buf[INET6_ADDRSTRLEN + 8 + 1];
+ 	int ret, len;
+ 	void *sa;
+ 
+@@ -320,8 +334,6 @@ dns_resolver(const char *server_name, unsigned mask)
+ 		return -1;
+ 	}
+ 
+-	debug("getaddrinfo = %d", ret);
+-
+ 	for (ai = addr; ai; ai = ai->ai_next) {
+ 		debug("RR: %x,%x,%x,%x,%x,%s",
+ 		      ai->ai_flags, ai->ai_family,
+@@ -350,6 +362,8 @@ dns_resolver(const char *server_name, unsigned mask)
+ 		if (!inet_ntop(ai->ai_family, sa, buf, len))
+ 			error("%s: inet_ntop: %m", __func__);
+ 
++		if (port)
++			strcat(buf, port);
+ 		append_address_to_payload(buf);
+ 		if (mask & ONE_ADDR_ONLY)
+ 			break;
+@@ -413,7 +427,7 @@ static void afsdb_hosts_to_addrs(ns_msg handle,
+ 					goto next_one;
+ 
+ 			/* Turn the hostname into IP addresses */
+-			ret = dns_resolver(vllist[vlsnum], mask);
++			ret = dns_resolver(vllist[vlsnum], NULL);
+ 			if (ret) {
+ 				debug("AFSDB RR can't resolve."
+ 				      "subtype:%d, server name:%s, netmask:%u",
+@@ -523,7 +537,6 @@ int dns_query_afsdb(const char *cell, char *options)
+ static __attribute__((noreturn))
+ int dns_query_a_or_aaaa(const char *hostname, char *options)
+ {
+-	unsigned mask;
+ 	int ret;
+ 
+ 	debug("Get A/AAAA RR for hostname:'%s', options:'%s'",
+@@ -569,7 +582,7 @@ int dns_query_a_or_aaaa(const char *hostname, char *options)
+ 	}
+ 
+ 	/* Turn the hostname into IP addresses */
+-	ret = dns_resolver(hostname, mask);
++	ret = dns_resolver(hostname, NULL);
+ 	if (ret)
+ 		nsError(NO_DATA, hostname);
+ 
+@@ -630,7 +643,7 @@ int main(int argc, char *argv[])
+ 
+ 	openlog(prog, 0, LOG_DAEMON);
+ 
+-	while ((ret = getopt_long(argc, argv, "vD", long_options, NULL)) != -1) {
++	while ((ret = getopt_long(argc, argv, "vDV", long_options, NULL)) != -1) {
+ 		switch (ret) {
+ 		case 'D':
+ 			debug_mode = 1;
+@@ -713,6 +726,8 @@ int main(int argc, char *argv[])
+ 	qtlen = name - keyend;
+ 	name++;
+ 
++	info("Query type: '%*.*s'", qtlen, qtlen, keyend);
++
+ 	if ((qtlen == sizeof(a_query_type) - 1 &&
+ 	     memcmp(keyend, a_query_type, sizeof(a_query_type) - 1) == 0) ||
+ 	    (qtlen == sizeof(aaaa_query_type) - 1 &&
