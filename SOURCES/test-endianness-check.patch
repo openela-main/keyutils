@@ -1,0 +1,23 @@
+commit d0fedbf9257a0fed18030527fd094588df5873aa
+Author: David Howells <dhowells@redhat.com>
+Date:   Tue Aug 21 23:24:03 2018 +0100
+
+    TEST: Add a missing backslash
+    
+    Add a missing backslash into a regular expression in the toolbox.
+    
+    Signed-off-by: David Howells <dhowells@redhat.com>
+
+diff --git a/tests/toolbox.inc.sh b/tests/toolbox.inc.sh
+index 140be66..0ce6db0 100644
+--- a/tests/toolbox.inc.sh
++++ b/tests/toolbox.inc.sh
+@@ -13,7 +13,7 @@
+ echo === $OUTPUTFILE ===
+ 
+ endian=`file -L /proc/$$/exe`
+-if expr "$endian" : '.* MSB \+\(executable\|shared object).*' >&/dev/null
++if expr "$endian" : '.* MSB \+\(executable\|shared object\).*' >&/dev/null
+ then
+     endian=BE
+ elif expr "$endian" : '.* LSB \+\(executable\|shared object\).*' >&/dev/null
